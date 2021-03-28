@@ -1,5 +1,0 @@
-INPUT: 
-	Hallo
- 	(Content of file 'hello.txt')
-RESULT: 
-	The file 'hello.txt' has 5 human-readable character(s). 
