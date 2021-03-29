@@ -10,5 +10,5 @@ Program of a simple command line interface that reads text from a file or termin
 6. Now you are ready to use the CLI!
 
 ## Further information
-This program has been created in the scope of a Coding Challenge by Bosch SPECS.
-It was developed using OpenJDK 15 and OpenJRE 15, Visual Studio Code, abd the PicoCLI Framework on Windows 10 (64-bit).
+This program has been created in the scope of a Coding Challenge.
+It was developed using OpenJDK 11 and OpenJRE 11, Visual Studio Code, abd the PicoCLI Framework on Windows 10 (64-bit).
