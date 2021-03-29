@@ -1,0 +1,4 @@
+INPUT: 
+	iuef GIgeqcg gepqg COHH Dqzufd
+RESULT: 
+	Your input has 30 human-readable character(s). 
