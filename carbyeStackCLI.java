@@ -8,12 +8,26 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.concurrent.Callable;
+
+import org.apache.commons.io.FilenameUtils;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 
 // class definition of the CarbyeStack Command Line Interface
 @Command(name = "CarbyeStackCLI", version = "Carbye Stack CLI 1.0", mixinStandardHelpOptions = true)
 public class carbyeStackCLI implements Callable<Integer> {
+    int nbChars = 0;
+    int nbSpaces = 0;
+    int nbWords = 0;
+    int nbLines = 0;
+    String textInput = "";
+    boolean fileInputOption;
+    boolean exportResultOption;
 
     // defintion of all possible options of the CLI
     @Option(names = { "-f", "--fileInput" }, paramLabel = "<Input-file>", description = "Input via a TEXT file.") 
@@ -34,17 +48,10 @@ public class carbyeStackCLI implements Callable<Integer> {
     // call method modification 
     @Override
     public Integer call() throws Exception {
-        int nbChars = 0;
-        int nbSpaces = 0;
-        int nbWords = 0;
-        int nbLines = 0;
-        String textInput = "";
 
-        boolean fileInputOption;
         if(inputFile != null) fileInputOption = true;
         else fileInputOption = false;
 
-        boolean exportResultOption;
         if(exportPath != null) exportResultOption = true;
         else exportResultOption = false;
 
@@ -66,27 +73,88 @@ public class carbyeStackCLI implements Callable<Integer> {
             nbLines = Lines.length;
             return printResult(fileInputOption, directInputOption, exportResultOption, nbWords, nbSpaces, nbLines, nbChars, textInput, inputFile);
         } else if (fileInputOption) {
-            try {
-                BufferedReader reader = null;
-                FileInputStream fileStream = new FileInputStream(inputFile);
-                InputStreamReader input = new InputStreamReader(fileStream);
-                reader = new BufferedReader(input);
-                String data;
-                while ((data = reader.readLine()) != null) {
-                    textInput += data;
-                    nbChars += data.length();
-                    String[] Words = data.split(" ");
-                    nbWords += Words.length;
-                    nbLines++;
-                }
-                for (char c : textInput.toCharArray()) {
-                    if (c == ' ' | c == '\t') {
-                         nbSpaces++;
+            try { 
+                // for doc, docx and other office open xml files
+                if (FilenameUtils.getExtension(inputFile.getName()).equals("docx") 
+                        | FilenameUtils.getExtension(inputFile.getName()).equals("doc")) {
+                    String data = getPlainTextFromFile(inputFile);
+                    String[] lines = data.split("\n");
+                    for (String line : lines){
+                        textInput += line;
+                        //nbChars += line.length();
+                        String[] Words = line.split(" ");
+                        nbWords += Words.length;
+                        nbLines++;
+                        for (String word : Words){
+                            nbChars += word.length();
+                        }
+                    } 
+                    for (char c : textInput.toCharArray()) {
+                        if (c == ' ' | c == '\n' | c == '\t') {
+                             nbSpaces++;
+                        }
                     }
+                } else if (FilenameUtils.getExtension(inputFile.getName()).equals("pdf")) { // for pdf files
+                    System.out.println("pdf detected.");
+                    PDDocument document = PDDocument.load(inputFile);
+                    String data;
+                    if (!document.isEncrypted()) {
+                        PDFTextStripper stripper = new PDFTextStripper();
+                        data = stripper.getText(document);
+                    } else {
+                        System.out.println("Error! Cannot read encrypted document.");
+                        return -1;
+                    }
+                    document.close();
+                    String[] lines = data.split("\n");
+                    for (String line : lines){
+                        textInput += line;
+                        String[] Words = line.split(" ");
+                        int errCount = 0;
+                        for (String word : Words){
+                            if (!word.isEmpty() | !word.isBlank() | !word.equals(" ")) {
+                                nbChars += word.length();
+                            } 
+                            if (word.isEmpty() | word.isBlank() | word.equals(" ")) {
+                                errCount++;
+                            }
+                        }
+                        nbWords += Words.length - errCount;
+                        nbLines++;
+                    } 
+                    for (char c : textInput.toCharArray()) {
+                        if (c == ' ') nbSpaces++;
+                    }
+                    // pdf specific correction
+                    nbChars -= nbLines;
+                } else { //for text files
+                    BufferedReader reader = null;
+                    FileInputStream fileStream = new FileInputStream(inputFile);
+                    InputStreamReader input = new InputStreamReader(fileStream);
+                    reader = new BufferedReader(input);
+                    String data;
+                    while ((data = reader.readLine()) != null) {
+                        textInput += data;
+                        nbChars += data.length();
+                        String[] Words = data.split(" ");
+                        int errCount = 0;
+                        for (String word : Words){ 
+                            if (word.isEmpty() | word.isBlank() | word.equals(" ")) {
+                                errCount++;
+                            }
+                        }
+                        nbWords += Words.length - errCount;
+                        nbLines++;
+                    }
+                    for (char c : textInput.toCharArray()) {
+                        if (c == ' ') {
+                             nbSpaces++;
+                        }
+                    }
+                    nbChars -= nbSpaces;
+                    textInput += "\n \t(Content of file '" + inputFile.getName() + "')"; 
+                    reader.close();
                 }
-                nbChars -= nbSpaces;
-                textInput += "\n \t(Content of file '" + inputFile.getName() + "')"; 
-                reader.close();
                 return printResult(fileInputOption, directInputOption, exportResultOption, nbWords, nbSpaces, nbLines, nbChars, textInput, inputFile);
                 
             } catch (FileNotFoundException e) {
@@ -96,6 +164,39 @@ public class carbyeStackCLI implements Callable<Integer> {
             }
         }
         return -1;
+    }
+    
+    /**
+     * Method for extracting text from a word, excel or other office open xml files.
+     * Input is our given inputFile.
+     * Output is a String containing the corresponding text content.
+     */
+    public String getPlainTextFromFile(File file){
+        InputStream inputstream;
+        try {
+            inputstream = new FileInputStream(file);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            return "";
+        } 
+        // read the file 
+        XWPFDocument adoc;
+        try {
+            adoc = new XWPFDocument(inputstream);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "";
+        }
+        // and place it in a xwpf format
+        XWPFWordExtractor extractor = new XWPFWordExtractor(adoc);
+        String aString = extractor.getText(); 
+        try {
+            extractor.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "";
+        }          
+        return aString;
     }
 
     /*
@@ -112,7 +213,7 @@ public class carbyeStackCLI implements Callable<Integer> {
         if(!exportResultOption){
             if(nbWordsOption) System.out.println(outputType + " has " + nbWords + " word(s). ");
             if(nbLinesOption) System.out.println(outputType + " has " + nbLines + " line(s). ");
-            if(!nbLinesOption & !nbWordsOption) System.out.println(outputType + " has " + nbChars + " human-readable character(s) as well as " + nbSpaces + " space(s). \n");
+            if(!nbLinesOption & !nbWordsOption) System.out.println(outputType + " has " + nbChars + " human-readable character(s) as well as " + nbSpaces + " space(s).");
             return 0;    
         } else {
             File outputFile = new File(exportPath);
@@ -134,8 +235,25 @@ public class carbyeStackCLI implements Callable<Integer> {
         }
     }
 
+    // getter methods
+    public int getNbChars(){
+        return nbChars;
+    }
+
+    public int getNbSpaces(){
+        return nbSpaces;
+    }
+
+    public int getNbWords(){
+        return nbWords;
+    }
+
+    public int getNbLines(){
+        return nbLines;
+    }
+
     // main method
-    public static void main(String[] args) {
+    public static void main(String[] args) { 
         int exitCode = new CommandLine(new carbyeStackCLI()).execute(args);
         System.exit(exitCode);
     }
