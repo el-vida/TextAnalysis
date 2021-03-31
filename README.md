@@ -11,4 +11,4 @@ Program of a simple command line interface that reads text from a file or termin
 
 ## Further information
 This program has been created in the scope of a Coding Challenge.
-It was developed using OpenJDK 11 and OpenJRE 11, Visual Studio Code, abd the PicoCLI Framework on Windows 10 (64-bit).
+It was developed using OpenJDK 11 and OpenJRE 11, Visual Studio Code, GraalVM Native-Image, Maven and the PicoCLI Framework on Windows 10 (64-bit).
